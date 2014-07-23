@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <string.h>
 #include <signal.h>
 #include <ctype.h>
@@ -13,18 +14,18 @@
 /*------------------------------------------
     Shellcode testing program
     Usage:
-        shtest [-s socked_fd_no] {-f file | $'\xeb\xfe' | '\xb8\x39\x05\x00\x00\xc3'}
+        sct [-s socked_fd_no] {-f file | $'\xeb\xfe' | '\xb8\x39\x05\x00\x00\xc3'}
     Usage example:
-        $ shtest $'\xeb\xfe'                 # raw shellcode
-        $ shtest '\xb8\x39\x05\x00\x00\xc3'  # escaped shellcode
-        $ shtest -f test.sc                  # shellcode from file
-        $ shtest -f <(python gen_payload.py) # test generated payload
-        $ shtest -s 5 -f test.sc             # create socket at fd=5
+        $ sct $'\xeb\xfe'                 # raw shellcode
+        $ sct '\xb8\x39\x05\x00\x00\xc3'  # escaped shellcode
+        $ sct -f test.sc                  # shellcode from file
+        $ sct -f <(python gen_payload.py) # test generated payload
+        $ sct -s 5 -f test.sc             # create socket at fd=5
             # Allows to test staged shellcodes
             # Flow is redirected like this: STDIN -> SOCKET -> STDOUT
     Compiling:
-        gcc -Wall shtest.c -o shtest
-    Author: hellman (hellman1908@gmail.com)
+        gcc -Wall sct.c -o sct
+    Author: hellman (hellman1908@gmail.com), zTrix (i@ztrix.me)
 -------------------------------------------*/
 
 char buf[4096];
@@ -48,22 +49,22 @@ void run_shellcode(void *sc_ptr);
 
 
 void usage(char * err) {
-    printf("    Shellcode testing program\n\
+    printf("    Shellcode Testing program\n\
     Usage:\n\
-        shtest {-f file | $'\\xeb\\xfe' | '\\xb8\\x39\\x05\\x00\\x00\\xc3'}\n\
+        sct {-f file | $'\\xeb\\xfe' | '\\xb8\\x39\\x05\\x00\\x00\\xc3'}\n\
     Usage example:\n\
-        $ shtest $'\\xeb\\xfe'                 # raw shellcode\n\
-        $ shtest '\\xb8\\x39\\x05\\x00\\x00\\xc3'  # escaped shellcode\n\
-        $ shtest -f test.sc                  # shellcode from file\n\
-        $ shtest -f <(python gen_payload.py) # test generated payload\n\
-        $ shtest -s 5 -f test.sc             # create socket at fd=5 (STDIN <- SOCKET -> STDOUT)\n\
+        $ sct $'\\xeb\\xfe'                 # raw shellcode\n\
+        $ sct '\\xb8\\x39\\x05\\x00\\x00\\xc3'  # escaped shellcode\n\
+        $ sct -f test.sc                  # shellcode from file\n\
+        $ sct -f <(python gen_payload.py) # test generated payload\n\
+        $ sct -s 5 -f test.sc             # create socket at fd=5 (STDIN <- SOCKET -> STDOUT)\n\
             # Allows to test staged shellcodes\
             # Flow is redirected like this: STDIN -> SOCKET -> STDOUT\
     Compiling:\n\
-        gcc -Wall shtest.c -o shtest\n\
-    Author: hellman (hellman1908@gmail.com)\n");
-    if (err) printf("\nerr: %s\n", err);
-    exit(1);
+        gcc -Wall sct.c -o sct\n\
+    Author: hellman (hellman1908@gmail.com) zTrix (i@ztrix.me)\n");
+    if (err) fprintf(stderr, "\nerr: %s\n", err);
+    exit(10);
 }
 
 int main(int argc, char **argv) {
@@ -260,40 +261,23 @@ void set_ready(int sig) {
 
 void run_shellcode(void *sc_ptr) {
     int ret = 0, status = 0;
-    int (*ptr)();
+    void (*ptr)();
     
     ptr = sc_ptr;
-    mprotect((void *) ((unsigned int)ptr & 0xfffff000), 4096 * 2, 7);
-    
-    void *esp, *ebp;
-    void *edi, *esi;
 
-    asm ("movl %%esp, %0;"
-         "movl %%ebp, %1;"
-         :"=r"(esp), "=r"(ebp));
+    mprotect((void *) ((uintptr_t)ptr - ((uintptr_t)ptr & (uintptr_t)0xfff)), 4096 * 2, 7);
     
-    asm ("movl %%esi, %0;"
-         "movl %%edi, %1;"
-         :"=r"(esi), "=r"(edi)); 
-    
-    printf("Shellcode at %p\n", ptr);
-    printf("Registers before call:\n");
-    printf("  esp: %p, ebp: %p\n", esp, ebp);
-    printf("  esi: %p, edi: %p\n", esi, edi);
-
-    printf("----------------------\n");
     if (pid1 > 0) kill(pid1, SIGUSR1);
     if (pid2 > 0) kill(pid2, SIGUSR1);
 
-    ret = (*ptr)();
+    (*ptr)();
 
-    if (sock != -1)
+    if (sock != -1) {
         close(sock);
+    }
     
     wait(&status);
 
-    printf("----------------------\n");
-    
     printf("Shellcode returned %d\n", ret);
     exit(0);
 }

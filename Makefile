@@ -1,2 +1,2 @@
 all:
-	gcc -Wall shtest.c -o shtest
+	gcc -Wall sct.c -osct
