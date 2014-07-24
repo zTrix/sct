@@ -14,7 +14,7 @@
 /*------------------------------------------
     Shellcode testing program
     Usage:
-        sct [-s socked_fd_no] {-f file | $'\xeb\xfe' | '\xb8\x39\x05\x00\x00\xc3'}
+        sct [-g] [-s socked_fd_no] {-f file | $'\xeb\xfe' | '\xb8\x39\x05\x00\x00\xc3'}
     Usage example:
         $ sct $'\xeb\xfe'                 # raw shellcode
         $ sct '\xb8\x39\x05\x00\x00\xc3'  # escaped shellcode
@@ -28,7 +28,8 @@
     Author: hellman (hellman1908@gmail.com), zTrix (i@ztrix.me)
 -------------------------------------------*/
 
-char buf[4096];
+#define BUF_SIZE 1048576
+char buf[BUF_SIZE];
 int pid1, pid2;
 int sock;
 int ready;
@@ -36,8 +37,9 @@ int ready;
 void usage(char * err);
 int main(int argc, char **argv);
 
-void load_from_file(char *fname);
-void copy_from_argument(char *arg);
+int get_pipe_in();
+int load_from_file(char *fname);
+int copy_from_argument(char *arg);
 void escape_error();
 
 int create_sock();
@@ -45,21 +47,21 @@ void run_reader(int);
 void run_writer(int);
 void set_ready(int sig);
 
-void run_shellcode(void *sc_ptr);
+void run_shellcode(void *sc_ptr, int size);
 
 
 void usage(char * err) {
-    printf("    Shellcode Testing program\n\
+    printf("Shellcode Testing program\n\
     Usage:\n\
-        sct {-f file | $'\\xeb\\xfe' | '\\xb8\\x39\\x05\\x00\\x00\\xc3'}\n\
-    Usage example:\n\
+        sct [-g] {-f file | $'\\xeb\\xfe' | '\\xb8\\x39\\x05\\x00\\x00\\xc3'}\n\
+    Example:\n\
         $ sct $'\\xeb\\xfe'                 # raw shellcode\n\
         $ sct '\\xb8\\x39\\x05\\x00\\x00\\xc3'  # escaped shellcode\n\
         $ sct -f test.sc                  # shellcode from file\n\
         $ sct -f <(python gen_payload.py) # test generated payload\n\
         $ sct -s 5 -f test.sc             # create socket at fd=5 (STDIN <- SOCKET -> STDOUT)\n\
-            # Allows to test staged shellcodes\
-            # Flow is redirected like this: STDIN -> SOCKET -> STDOUT\
+            # Allows to test staged shellcodes\n\
+            # Flow is redirected like this: STDIN -> SOCKET -> STDOUT\n\
     Compiling:\n\
         gcc -Wall sct.c -o sct\n\
     Author: hellman (hellman1908@gmail.com) zTrix (i@ztrix.me)\n");
@@ -73,11 +75,15 @@ int main(int argc, char **argv) {
 
     pid1 = pid2 = -1;
     sock = -1;
+    int debug = 0;
 
-    while ((c = getopt(argc, argv, "hus:f:")) != -1) {
+    while ((c = getopt(argc, argv, "ghus:f:")) != -1) {
         switch (c) {
             case 'f':
                 fname = optarg;
+                break;
+            case 'g':
+                debug = 1;
                 break;
             case 's':
                 sock = atoi(optarg);
@@ -92,45 +98,80 @@ int main(int argc, char **argv) {
         }
     }
 
-    if (argc == 1)
-        usage(NULL);
+    int size = 0;
 
-    if (optind < argc && fname)
-        usage("can't load shellcode both from argument and file");
-    
-    if (!(optind < argc) && !fname)
-        usage("please provide shellcode via either argument or file");
-
-    if (optind < argc) {
-        copy_from_argument(argv[optind]);
-    }
-    else {
-        load_from_file(fname);
-    }
-
-    //create socket if needed
-    if (sock != -1) {
+    if (!isatty(0)) {
+        int size = get_pipe_in();
+        if (size == 0) {
+            fprintf(stderr, "read 0 bytes from pipe\n");
+            exit(11);
+        }
+    } else if (optind < argc) {
+        size = copy_from_argument(argv[optind]);
+        fprintf(stderr, "copied %d bytes from command line args\n", size);
+    } else if (fname) {
+        size = load_from_file(fname);
+    } else if (sock != -1) {
         int created_sock = create_sock(sock);
-        printf("Created socket %d\n", created_sock);
+        fprintf(stderr, "Created socket %d\n", created_sock);
+    } else {
+        usage("please provide shellcode via either argument or file");
     }
 
-    run_shellcode(buf);
+    if (debug) {
+        fprintf(stderr, "connect debugger using gdb/lldb -p %d\n", getpid());
+        if (!isatty(0)) {
+            fprintf(stderr, "wait 5 seconds to run shellcode...\n");
+            sleep(5);
+        } else {
+            fprintf(stderr, "press enter to run shellcode...\n");
+            getchar();
+        }
+    }
+    fprintf(stderr, "running shellcode...\n");
+    run_shellcode(buf, size);
     return 100;
 }
 
-void load_from_file(char *fname) {
-    FILE * fd = fopen(fname, "r");
-    if (!fd) {
-        perror("fopen");
+int get_pipe_in() {
+    int p = 0;
+    while (1) {
+        if (p >= BUF_SIZE) {
+            fprintf(stderr, "shellcode too large\n");
+            exit(10);
+        }
+        int rd = read(0, &buf[p], BUF_SIZE - p > 4096 ? 4096 : BUF_SIZE - p);
+        if (rd <= 0) break;
+        p += rd;
+    }
+    fprintf(stderr, "Read %d bytes from stdin\n", p);
+    return p;
+}
+
+int load_from_file(char *fname) {
+    int fd = open(fname, O_RDONLY);
+    if (fd < 0) {
+        fprintf(stderr, "fopen %s failed\n", fname);
         exit(100);
     }
 
-    int c = fread(buf, 1, 4096, fd);
-    printf("Read %d bytes from '%s'\n", c, fname);
-    fclose(fd);
+    int p = 0;
+    while (1) {
+        if (p >= BUF_SIZE) {
+            fprintf(stderr, "shellcode too large\n");
+            exit(10);
+        }
+        int rd = read(fd, &buf[p], BUF_SIZE - p > 4096 ? 4096 : BUF_SIZE - p);
+        if (rd <= 0) break;
+        p += rd;
+    }
+
+    fprintf(stderr, "Read %d bytes from '%s'\n", p, fname);
+    close(fd);
+    return p;
 }
 
-void copy_from_argument(char *arg) {
+int copy_from_argument(char *arg) {
     //try to translate from escapes ( \xc3 )
 
     bzero(buf, sizeof(buf));
@@ -141,16 +182,26 @@ void copy_from_argument(char *arg) {
     char *p2 = buf;
     char *end = p1 + strlen(p1);
 
+    int size = 0;
     while (p1 < end) {
         i = sscanf(p1, "\\x%02x", (unsigned int *)p2);
         if (i != 1) {
-            if (p2 == p1) break;
+            if (p2 == p1) {
+                if (p1 == buf) {
+                    size = strlen(p1);
+                } else {
+                    size = p2 - buf;
+                }
+                break;
+            }
             else escape_error();
         }
 
         p1 += 4;
         p2 += 1;
+        size = p2 - buf;
     }
+    return size;
 }
 
 void escape_error() {
@@ -216,7 +267,7 @@ void run_reader(int fd) {
     int n;
 
     while (!ready) {
-        usleep(0.1);
+        usleep(1);
     }
 
     while (1) {
@@ -237,7 +288,7 @@ void run_writer(int fd) {
     int n;
     
     while (!ready) {
-        usleep(0.1);
+        usleep(1);
     }
 
     while (1) {
@@ -259,7 +310,7 @@ void set_ready(int sig) {
     ready = 1;
 }
 
-void run_shellcode(void *sc_ptr) {
+void run_shellcode(void *sc_ptr, int size) {
     int ret = 0, status = 0;
     void (*ptr)();
     
@@ -278,6 +329,6 @@ void run_shellcode(void *sc_ptr) {
     
     wait(&status);
 
-    printf("Shellcode returned %d\n", ret);
+    fprintf(stderr, "Shellcode returned %d\n", ret);
     exit(0);
 }
