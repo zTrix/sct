@@ -11,23 +11,6 @@
 #include <sys/wait.h>
 #include <sys/socket.h>
 
-/*------------------------------------------
-    Shellcode testing program
-    Usage:
-        sct [-g] [-s socked_fd_no] {-f file | $'\xeb\xfe' | '\xb8\x39\x05\x00\x00\xc3'}
-    Usage example:
-        $ sct $'\xeb\xfe'                 # raw shellcode
-        $ sct '\xb8\x39\x05\x00\x00\xc3'  # escaped shellcode
-        $ sct -f test.sc                  # shellcode from file
-        $ sct -f <(python gen_payload.py) # test generated payload
-        $ sct -s 5 -f test.sc             # create socket at fd=5
-            # Allows to test staged shellcodes
-            # Flow is redirected like this: STDIN -> SOCKET -> STDOUT
-    Compiling:
-        gcc -Wall sct.c -o sct
-    Author: hellman (hellman1908@gmail.com), zTrix (i@ztrix.me)
--------------------------------------------*/
-
 #define BUF_SIZE 1048576
 char buf[BUF_SIZE];
 int pid1, pid2;
@@ -62,6 +45,8 @@ void usage(char * err) {
         $ sct -s 5 -f test.sc             # create socket at fd=5 (STDIN <- SOCKET -> STDOUT)\n\
             # Allows to test staged shellcodes\n\
             # Flow is redirected like this: STDIN -> SOCKET -> STDOUT\n\
+    Note:\n\
+        You should always use single quote in shell to avoid escape by sh\n\
     Compiling:\n\
         gcc -Wall sct.c -o sct\n\
     Author: hellman (hellman1908@gmail.com) zTrix (i@ztrix.me)\n");
@@ -118,6 +103,17 @@ int main(int argc, char **argv) {
         usage("please provide shellcode via either argument or file");
     }
 
+    void * ps = (void *) ((uintptr_t)buf - ((uintptr_t)buf & (uintptr_t)0xfff));
+    fprintf(stderr, "buf = %p, mprotect %p \n", buf, ps);
+    int ret = mprotect(ps, sizeof(buf) + ((uintptr_t)buf & (uintptr_t)0xfff), 7);
+    if (ret < 0) {
+        fprintf(stderr, "mprotect failed (return %d)\n", ret);
+        return 15;
+    }
+    
+    if (pid1 > 0) kill(pid1, SIGUSR1);
+    if (pid2 > 0) kill(pid2, SIGUSR1);
+
     if (debug) {
         fprintf(stderr, "connect debugger using gdb/lldb -p %d\n", getpid());
         if (!isatty(0)) {
@@ -128,7 +124,9 @@ int main(int argc, char **argv) {
             getchar();
         }
     }
+
     fprintf(stderr, "running shellcode...\n");
+
     run_shellcode(buf, size);
     return 100;
 }
@@ -311,15 +309,12 @@ void set_ready(int sig) {
 }
 
 void run_shellcode(void *sc_ptr, int size) {
-    int ret = 0, status = 0;
-    void (*ptr)();
-    
-    ptr = sc_ptr;
 
-    mprotect((void *) ((uintptr_t)ptr - ((uintptr_t)ptr & (uintptr_t)0xfff)), 4096 * 2, 7);
+    // keep it clean here, to make it easy to set breakpoint (b run_shellcode)
+    void (*ptr)();
+    int ret = 0;
     
-    if (pid1 > 0) kill(pid1, SIGUSR1);
-    if (pid2 > 0) kill(pid2, SIGUSR1);
+    ptr = (void *)sc_ptr;
 
     (*ptr)();
 
@@ -327,8 +322,10 @@ void run_shellcode(void *sc_ptr, int size) {
         close(sock);
     }
     
+    int status = 0;
     wait(&status);
 
     fprintf(stderr, "Shellcode returned %d\n", ret);
     exit(0);
 }
+

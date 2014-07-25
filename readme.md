@@ -1,11 +1,10 @@
 
-# Shellcode testing program
-
+# Shellcode Testing helper
 
 ## Usage
 
-    sct {-f file | $'\xeb\xfe' | '\xb8\x39\x05\x00\x00\xc3'}
-
+    $ sct [-g] {-f file | $'\xeb\xfe' | '\xb8\x39\x05\x00\x00\xc3'}
+    $ printf '\xeb\xfe' | sct
 
 ## Examples
 
