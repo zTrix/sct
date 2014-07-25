@@ -5,6 +5,8 @@ true :;./sct '\x55\x48\x89\xe5\xeb\x33\x48\x31\xff\x66\xbf\x01\x00\x5e\x48\x31\x
 ; nasm -f macho64 -o HelloWorld.o HelloWorld.s
 ; ld -arch x86_64 -o HelloWorld HelloWorld.o
 
+BITS 64
+
 global start
 
 section .text
@@ -16,10 +18,10 @@ start:
 
     jmp short String
 
+StringRet:
     xor rdi, rdi
     mov di, 0x01
 
-StringRet:
     pop rsi
 
     xor rdx, rdx
@@ -47,4 +49,4 @@ StringRet:
 String:
 
     call StringRet
-    db 'Hello, World!'
+    db 'Hello, World!', 0x0a
