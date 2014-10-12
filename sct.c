@@ -32,7 +32,7 @@ void run_writer(int);
 void set_ready(int sig);
 
 void run_shellcode(void *sc_ptr, int size);
-
+void print_regs();
 
 void usage(char * err) {
     printf("Shellcode Testing program\n\
@@ -320,11 +320,16 @@ void run_shellcode(void *sc_ptr, int size) {
 
     // keep it clean here, to make it easy to set breakpoint (b run_shellcode)
     void (*ptr)();
+
     int ret = 0;
     
     ptr = (void *)((uintptr_t)sc_ptr | thumb_mode);
 
+    print_regs();
+
     (*ptr)();
+
+    print_regs();
 
     if (sock != -1) {
         close(sock);

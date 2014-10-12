@@ -1,1 +1,4 @@
 sct
+sct_i386_Darwin
+sct_x86-64_Darwin
+*.o
