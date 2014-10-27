@@ -6,7 +6,7 @@ bits 64
     push   0x3b
     pop    rax
     cdq
-    movabs rbx,0x68732f2f6e69622f
+    mov rbx,0x68732f2f6e69622f
 
     push   rdx
     push   rbx
