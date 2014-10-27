@@ -1,4 +1,6 @@
 sct
-sct_i386_Darwin
-sct_x86-64_Darwin
+/sct_i386_Darwin
+/sct_x86-64_Darwin
+/sct_x86-64_Linux
+/sct_i386_Linux
 *.o

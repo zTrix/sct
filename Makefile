@@ -25,4 +25,4 @@ x86_64.o: x86_64.S
 	$(CC) -c -mllvm --x86-asm-syntax=intel $^ -o $@
 
 clean:
-	rm -f *.o sct_i386_$(OS) sct_x86-64_$(OS)
+	rm -f *.o sct_i386_Linux sct_x86-64_Linux sct_i386_Darwin sct_x86-64_Darwin
