@@ -18,11 +18,11 @@ sct_i386_$(OS): i386.o sct_i386.o
 sct_x86-64_$(OS): x86_64.o sct_x86-64.o
 	$(CC) $(CCARGS) $^ -o $@
 
-i386.o: i386.s
+i386.o: i386.S
 	$(CC) -c -m32 -mllvm --x86-asm-syntax=intel $^ -o $@
 
-x86_64.o: x86_64.s
+x86_64.o: x86_64.S
 	$(CC) -c -mllvm --x86-asm-syntax=intel $^ -o $@
 
 clean:
-	rm -f i386.o sct_i386_$(OS) sct_x86-64_$(OS)
+	rm -f *.o sct_i386_$(OS) sct_x86-64_$(OS)

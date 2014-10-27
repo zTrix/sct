@@ -1,8 +1,10 @@
 
+#include "asm_common.h"
+
 .file   "i386.s"
 
-.globl _print_regs
-_print_regs:
+.globl cdecl(print_regs)
+cdecl(print_regs):
     push esp
     push ebp
     pushf                   // must be saved here, or the following operation may affact eflags, push operation does not affact eflags
@@ -50,7 +52,7 @@ _print_regs:
     // push fmt string
     jmp print_regs_fmt
 get_back:
-    call _printf
+    call cdecl(printf)
     add esp, 16
     pop eax
     pop ecx
