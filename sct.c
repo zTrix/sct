@@ -17,6 +17,7 @@ int pid1, pid2;
 int sock;
 int ready;
 int thumb_mode = 0;
+int print_reg_flag = 0;
 
 void usage(char * err);
 int main(int argc, char **argv);
@@ -37,11 +38,12 @@ void print_regs();
 void usage(char * err) {
     printf("Shellcode Testing program\n\
     Usage:\n\
-        sct [-t] [-g] {-f file | $'\\xeb\\xfe' | '\\xb8\\x39\\x05\\x00\\x00\\xc3'}\n\
+        sct [-t] [-g] [-r] {-f file | $'\\xeb\\xfe' | '\\xb8\\x39\\x05\\x00\\x00\\xc3'}\n\
     Options:\n\
         -g  wait for gdb connection for debug\n\
         -f  read shellcode from file\n\
         -t  switch thumb mode (ARM only)\n\
+        -r  print regs before and after executing shellcode\n\
     Example:\n\
         $ sct $'\\xeb\\xfe'                 # raw shellcode\n\
         $ sct '\\xb8\\x39\\x05\\x00\\x00\\xc3'  # escaped shellcode\n\
@@ -67,7 +69,7 @@ int main(int argc, char **argv) {
     sock = -1;
     int debug = 0;
 
-    while ((c = getopt(argc, argv, "tghus:f:")) != -1) {
+    while ((c = getopt(argc, argv, "rtghus:f:")) != -1) {
         switch (c) {
             case 'f':
                 fname = optarg;
@@ -82,6 +84,9 @@ int main(int argc, char **argv) {
                 break;
             case 't':
                 thumb_mode = 1;
+                break;
+            case 'r':
+                print_reg_flag = 1;
                 break;
             case 'h':
             case 'u':
@@ -325,11 +330,15 @@ void run_shellcode(void *sc_ptr, int size) {
     
     ptr = (void *)((uintptr_t)sc_ptr | thumb_mode);
 
-    print_regs();
+    if (print_reg_flag) {
+        print_regs();
+    }
 
     (*ptr)();
 
-    print_regs();
+    if (print_reg_flag) {
+        print_regs();
+    }
 
     if (sock != -1) {
         close(sock);
