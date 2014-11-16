@@ -60,10 +60,8 @@ get_back:
     pop ebx
     pop esi
     pop edi
-    popf
 
-    add esp, 26
-    pop esp
+    add esp, 42
 
     popf
     pop ebp
