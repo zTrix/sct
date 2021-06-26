@@ -2,7 +2,7 @@
 
 CC=clang
 OS=$(shell uname -s)
-CCARGS=-Wall -O0
+CCARGS=-Wall -O0 -g -no-pie
 
 all: sct_i386_$(OS) sct_x86-64_$(OS)
 
